@@ -14,6 +14,7 @@ namespace MagneCat.hook
 {
     public class Features
     {
+
         public static void OnModInit()
         {
             On.Player.ctor += Player_ctor;
@@ -49,6 +50,8 @@ namespace MagneCat.hook
 
     public class FloatingSpearModule
     {
+        public static bool testingFunc = false;
+
         public enum FloatingSpearState
         {
             Float,
@@ -61,7 +64,7 @@ namespace MagneCat.hook
             spearList = new List<int>();
             floatingCore = new FloatingCore(this);
 
-            SpearState = FloatingSpearState.Suction;
+            SpearState = testingFunc ? FloatingSpearState.Suction : FloatingSpearState.Float;
         }
 
         public Spear? GetSpear()
