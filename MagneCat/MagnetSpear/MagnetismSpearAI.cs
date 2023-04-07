@@ -9,6 +9,7 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 using Vector2 = UnityEngine.Vector2;
 
+
 namespace MagneCat.MagnetSpear
 {
     public class MagnetismSpearAI
@@ -34,6 +35,7 @@ namespace MagneCat.MagnetSpear
         public bool shouldUpdatePath = true;
         //用字典建立pather和ai的关系，如果两个矛可以使用类似的路径，那么可以两个使用同一个pather来计算路径
         public static Dictionary<MagnetismSpearAI, MagnetismQuickPathFinder> patherLinks = new Dictionary<MagnetismSpearAI, MagnetismQuickPathFinder>();
+
         public MagnetismSpearAI(FloatingCore floatingCoredule, Spear spear, Player player)
         {
             floatingCore = floatingCoredule;
@@ -42,28 +44,31 @@ namespace MagneCat.MagnetSpear
         }
         public void Update(Spear self)
         {
-            if(lastShouldMagnetism != floatingCore.ShouldMagnetismSpears && floatingCore.ShouldMagnetismSpears)//按下吸附的时候重新计算路径
+            //按下吸附的时候重新计算路径
+            if (lastShouldMagnetism != floatingCore.ShouldMagnetismSpears && floatingCore.ShouldMagnetismSpears)
             {
                 Debug.Log("ReUpdate Path");
                 shouldUpdatePath = true;
                 forceFollowingThisPathCounter = 0;
-                randomDelay = Random.Range(0, 10);
+                randomDelay = Random.Range(0, 5);
             }
             lastShouldMagnetism = floatingCore.ShouldMagnetismSpears;
 
+            //不吸附矛的时候更改矛的状态为正常状态
             if (!floatingCore.ShouldMagnetismSpears)
             {
                 self.gravity = 0.9f;
                 self.GoThroughFloors = false;
                 return;
             }
+
+            //吸附时候更改矛的状态
             if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.Frozen || self.mode == Weapon.Mode.OnBack) return;
             else
             {
                 self.ChangeMode(Weapon.Mode.Free);
             }
             if (!playerRef.TryGetTarget(out var player)) return;
-
 
             var newDest = player.coord;
             var room = self.room;
@@ -107,7 +112,7 @@ namespace MagneCat.MagnetSpear
                 }
                 if (shortcut.shortCutType == ShortcutData.Type.Normal && nextPathShortcutData != null && nextPathShortcutData.Value.shortCutType == shortcut.shortCutType)
                 {
-                    var vessel = new SpearShortcutVessel(self, SpearShortcutVessel.GetVirtualAbCreature(), self.room);
+                    var vessel = new SpearShortcutVessel(self, SpearShortcutVessel.GetVirtualAbCreature(), self.room);//利用一个包装的生物把矛从管道中带走
                     self.room.AddObject(vessel);
                     vessel.SuckedIntoShortCut(shortcut.StartTile, false);
                 }
@@ -119,7 +124,6 @@ namespace MagneCat.MagnetSpear
                 stuckInPosCounter = 0;
             }
         }
-
 
         public void UpdatePath(Room room,IntVector2 start, IntVector2 dest)
         {
@@ -179,7 +183,8 @@ namespace MagneCat.MagnetSpear
             }
 
             if (!(patherLinks.TryGetValue(this, out var updatePath))) return;
-            //每帧计算60步，对于一个中型房间，差不多需要2000步才能完成一次路径跟踪，当然这也取决于距离
+            //每帧对于一个AI最多计算120步，对于一个中型房间，差不多需要2000步才能完成一次路径跟踪，当然这也取决于距离
+            //同时因为多个AI会引用同一个Pather，所以同一批update中可能会出现多次对同一个pather的更新
             int tempStep = 0;
             while (updatePath.status == 0 && tempStep < Mathf.Max(5,(int)(120f / updatePath.LinkedAiCount))) 
             {
