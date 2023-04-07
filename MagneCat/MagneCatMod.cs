@@ -11,7 +11,7 @@ using System.Collections;
 #pragma warning restore CS0618
 namespace MagneCat
 {
-    [BepInPlugin("magnecat","Magnecat","1.0.0")]
+    [BepInPlugin("magnecat", "MagneCat", "1.0.0")]
     public class MagneCatMod : BaseUnityPlugin
     {
         bool inited = false;
