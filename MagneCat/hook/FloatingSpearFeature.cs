@@ -1,4 +1,5 @@
-﻿using MoreSlugcats;
+﻿using MagneCat.MagnetSpear;
+using MoreSlugcats;
 using RWCustom;
 using System;
 using System.Collections.Generic;
@@ -11,11 +12,10 @@ using UnityEngine;
 
 namespace MagneCat.hook
 {
-    static class FloatingSpearFeature
+    public class Features
     {
         public static void OnModInit()
         {
-            floatingSpear = new ConditionalWeakTable<Player, FloatingSpearModule>();
             On.Player.ctor += Player_ctor;
             On.Player.Update += Player_Update;
         }
@@ -24,24 +24,24 @@ namespace MagneCat.hook
 
         private static void Player_ctor(On.Player.orig_ctor orig, Player self, AbstractCreature abstractCreature, World world)
         {
+            Debug.Log("Player_Ctor");
             orig(self,abstractCreature,world);
-            FloatingSpearModule module;
-            if (!floatingSpear.TryGetValue(self, out module))
+            if (!floatingSpear.TryGetValue(self, out _))
+                Debug.Log("Add FloatingSpearModule");
                 floatingSpear.Add(self, new FloatingSpearModule(self));
         }
 
         private static void Player_Update(On.Player.orig_Update orig, Player self, bool eu)
         {
             orig(self, eu);
-            FloatingSpearModule module;
-            if (floatingSpear.TryGetValue(self, out module))
+            if (floatingSpear.TryGetValue(self, out var module))
                 module.Update();
         }
 
-        static public ConditionalWeakTable<Player, FloatingSpearModule> floatingSpear;
+        static public ConditionalWeakTable<Player, FloatingSpearModule> floatingSpear = new ConditionalWeakTable<Player, FloatingSpearModule>();
     }
 
-    class FloatingSpearModule
+    public class FloatingSpearModule
     {
         public enum FloatingSpearState
         {
@@ -49,13 +49,13 @@ namespace MagneCat.hook
             Suction
         }
 
-
-
         public FloatingSpearModule(Player player)
         {
             playerRef = new WeakReference<Player>(player);
             spearList = new List<int>();
-            SpearState = FloatingSpearState.Suction;
+            floatingCore = new FloatingCore(this);
+
+            SpearState = FloatingSpearState.Float;
         }
 
         public Spear GetSpear()
@@ -84,6 +84,7 @@ namespace MagneCat.hook
 
         public void Update()
         {
+            Debug.Log("update");
             Player player;
             if (!playerRef.TryGetTarget(out player))
                 return;
@@ -91,6 +92,11 @@ namespace MagneCat.hook
             {
                 case FloatingSpearState.Float:
                     //TODO : 漂浮模式！
+                    if(player.room != null && !player.inShortcut)
+                    {
+                        floatingCore.Update();
+                    }
+
                     break;
                     
                 case FloatingSpearState.Suction:
@@ -165,10 +171,11 @@ namespace MagneCat.hook
 
         public FloatingSpearState SpearState { get; private set; }
 
-        WeakReference<Player> playerRef;
-
-        float energy;
+        public WeakReference<Player> playerRef;
+        public float energy;
         List<int> spearList;
         int getSpearCounter = 0;
+
+        public FloatingCore floatingCore;
     }
 }

@@ -1,29 +1,39 @@
 ﻿using BepInEx;
+using MoreSlugcats;
 using MagneCat.hook;
-using System;
+using MagneCat.MagnetSpear;
+using System.Security.Permissions;
+using UnityEngine;
+using System.Collections;
 
 namespace MagneCat
 {
     [BepInPlugin("magnecat", "MagneCat", "1.0.0")]
     public class MagneCatMod : BaseUnityPlugin
     {
-        public MagneCatMod()
+        bool inited = false;
+        
+        public void OnEnable()
         {
             On.RainWorld.OnModsInit += RainWorld_OnModsInit;
         }
 
         private void RainWorld_OnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
         {
-            orig(self);
+            orig.Invoke(self);
+            if (inited) return;
+
             try
             {
-                FloatingSpearFeature.OnModInit();
+                Features.OnModInit();
+                SpearPatch.OnModInit();
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Logger.LogError(ex);
+                Debug.LogException(e);
             }
-         
+
+            inited = true;
         }
     }
 }
