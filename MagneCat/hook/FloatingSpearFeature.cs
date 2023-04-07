@@ -18,25 +18,15 @@ namespace MagneCat.hook
             floatingSpear = new ConditionalWeakTable<Player, FloatingSpearModule>();
             On.Player.ctor += Player_ctor;
             On.Player.Update += Player_Update;
-            On.Spear.HitSomething += Spear_HitSomething;
         }
 
-        private static bool Spear_HitSomething(On.Spear.orig_HitSomething orig, Spear self, SharedPhysics.CollisionResult result, bool eu)
-        {
-            FloatingSpearModule module;
-            if (self.thrownBy == result.obj && result.obj is Player && floatingSpear.TryGetValue((result.obj as Player),out module))
-            {
-                module.StoreSpear(self);
-                return true;
-            }
-            return orig(self,result, eu);
-        }
+     
 
         private static void Player_ctor(On.Player.orig_ctor orig, Player self, AbstractCreature abstractCreature, World world)
         {
             orig(self,abstractCreature,world);
             FloatingSpearModule module;
-            if (!floatingSpear.TryGetValue(self, out module) && )
+            if (!floatingSpear.TryGetValue(self, out module))
                 floatingSpear.Add(self, new FloatingSpearModule(self));
         }
 
@@ -64,27 +54,31 @@ namespace MagneCat.hook
         public FloatingSpearModule(Player player)
         {
             playerRef = new WeakReference<Player>(player);
-            spearList = new List<AbstractPhysicalObject.AbstractObjectType>();
+            spearList = new List<int>();
+            SpearState = FloatingSpearState.Suction;
         }
 
-        public Spear? GetSpear()
+        public Spear GetSpear()
         {
             Player player;
-            if (!playerRef.TryGetTarget(out player) || spearList.Count>0)
+            if (!playerRef.TryGetTarget(out player) || spearList.Count == 0)
                 return null;
-
             AbstractSpear abstractSpear = new AbstractSpear(player.room.world, null, player.coord, player.room.game.GetNewID(), spearList[0] == 1);
             abstractSpear.electric = spearList[0] == 2;
             abstractSpear.RealizeInRoom();
+            spearList.RemoveAt(0);
             return abstractSpear.realizedObject as Spear;
 
         }
 
         public void StoreSpear(Spear spear)
         {
+            
+            spear.room.RemoveObject(spear);
             spear.RemoveFromRoom();
             spearList.Add((spear is ExplosiveSpear)?1 : (spear is ElectricSpear) ? 2 : 0);
             spear.Destroy();
+            Debug.Log("Store Spear! Count :" + spearList.Count);
         }
 
 
@@ -93,7 +87,6 @@ namespace MagneCat.hook
             Player player;
             if (!playerRef.TryGetTarget(out player))
                 return;
-
             switch (SpearState)
             {
                 case FloatingSpearState.Float:
@@ -108,48 +101,62 @@ namespace MagneCat.hook
                             foreach(var phyObject in physicals)
                             {
                                 var spear = (phyObject as Spear);
-                                if (spear!=null && Custom.DistLess(phyObject.firstChunk.pos,player.mainBodyChunk.pos,1000) && 
-                                    (spear.mode != Weapon.Mode.StuckInWall || spear.mode != Weapon.Mode.StuckInCreature || spear.mode != Weapon.Mode.OnBack))
+                                if (spear!=null && 
+                                    (spear.mode != Weapon.Mode.StuckInWall && spear.mode != Weapon.Mode.StuckInCreature && spear.mode != Weapon.Mode.Thrown))
                                 {
+                                    if (spear.mode == Weapon.Mode.Carried || spear.mode == Weapon.Mode.OnBack)
+                                    {
+                                        if (spear.grabbedBy[0].grabber is Player)
+                                            continue;
+                                        else
+                                            spear.grabbedBy[0].grabber.ReleaseGrasp(spear.grabbedBy[0].grabber.grasps.IndexOf(spear.grabbedBy[0]));
+                                     }
+                                   
+
                                     var spearPos = player.room.GetTilePosition(spear.firstChunk.pos);
                                     var playerPos = player.room.GetTilePosition(player.mainBodyChunk.pos);
+                                    if (Custom.DistLess(phyObject.firstChunk.pos, player.mainBodyChunk.pos, 30))
+                                    {
+                                        StoreSpear(spear);
+                                        continue;
+                                    }
                                     if (!player.room.RayTraceTilesForTerrain(spearPos.x, spearPos.y, playerPos.x, playerPos.y))
-                                        break;
+                                        continue;
 
                                     if (spear.mode != Weapon.Mode.Free)
                                     {
                                         spear.ChangeMode(Weapon.Mode.Free);
-                                        spear.thrownBy = player;
                                         spear.rotationSpeed = 0;
                                     }
-
-                                    spear.firstChunk.vel += Mathf.InverseLerp(30,5,spear.firstChunk.vel.magnitude) * Custom.DirVec(phyObject.firstChunk.pos, player.mainBodyChunk.pos) * 10 * 1/40;
-                                    spear.rotationSpeed = (Custom.VecToDeg(spear.firstChunk.vel) - Custom.VecToDeg(spear.firstChunk.Rotation)) * 2 * 1 / 40;
+                                    spear.firstChunk.vel += Mathf.InverseLerp(200,0,spear.firstChunk.vel.magnitude) * Custom.DirVec(phyObject.firstChunk.pos, player.mainBodyChunk.pos)*3;
+                                    spear.rotationSpeed = ((Custom.VecToDeg(spear.firstChunk.vel) - Custom.VecToDeg(spear.firstChunk.Rotation)) % 180) * 2 * 1 / 40;
 
                                 }
                             }
                         }
                     }
+
+                    if (spearList.Count != 0 && player.FreeHand() != -1 && player.input[0].pckp)
+                    {
+                        getSpearCounter++;
+                        if (getSpearCounter == 20)
+                        {
+                            getSpearCounter = 0;
+                            var spear = (Spear)GetSpear();
+                            Debug.Log("Get Spear " + spear == null);
+                            if (spear != null)
+                            {
+                                player.SlugcatGrab(spear, player.FreeHand());
+                            }
+                        }
+                    }
+                    else if (getSpearCounter > 0)
+                    {
+                        getSpearCounter = 0;
+                    }
                     break;
             }
 
-            if (spearList.Count!=0 && player.FreeHand() != -1 && player.input[0].pckp)
-            {
-                getSpearCounter++;
-                if(getSpearCounter == 20)
-                {
-                    getSpearCounter = 0;
-                    var spear = (Spear)GetSpear();
-                    if (spear != null)
-                    {
-                        player.SlugcatGrab(spear,player.FreeHand());
-                    }
-                }
-            }
-            else if (getSpearCounter > 0)
-            {
-                getSpearCounter = 0;
-            }
 
 
         }
@@ -159,6 +166,7 @@ namespace MagneCat.hook
         public FloatingSpearState SpearState { get; private set; }
 
         WeakReference<Player> playerRef;
+
         float energy;
         List<int> spearList;
         int getSpearCounter = 0;
