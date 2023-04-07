@@ -23,6 +23,8 @@ namespace MagneCat.MagnetSpear
 
         public IntVector2 lastTile;
 
+        public Mode mode;
+
         public int nextTileTimeStacker = 0;
         public int currentPathIndex = 0;
         public int stuckInPosCounter = 0;//卡在一个地方太久则尝试重新计算
@@ -41,8 +43,23 @@ namespace MagneCat.MagnetSpear
             floatingCore = floatingCoredule;
             spearRef = new WeakReference<Spear>(spear);
             playerRef = new WeakReference<Player>(player);
+
+            mode = Mode.Magnetism;
         }
         public void Update(Spear self)
+        {
+            switch (mode)
+            {
+                case Mode.Magnetism:
+                    MagnetismUpdate(self);
+                    break;
+                case Mode.OnRing:
+                    OnRingUpdate(self);
+                    break;
+            }
+        }
+
+        public void MagnetismUpdate(Spear self)
         {
             //按下吸附的时候重新计算路径
             if (lastShouldMagnetism != floatingCore.ShouldMagnetismSpears && floatingCore.ShouldMagnetismSpears)
@@ -63,7 +80,7 @@ namespace MagneCat.MagnetSpear
             }
 
             //吸附时候更改矛的状态
-            if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.Frozen || self.mode == Weapon.Mode.OnBack) return;
+            if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack) return;
             else
             {
                 self.ChangeMode(Weapon.Mode.Free);
@@ -73,16 +90,16 @@ namespace MagneCat.MagnetSpear
             var newDest = player.coord;
             var room = self.room;
 
-            if(newDest != dest || shouldUpdatePath)
+            if (newDest != dest || shouldUpdatePath)
             {
                 dest = player.coord;
                 shouldUpdatePath = true;
             }
 
-            UpdatePath(room, self.abstractPhysicalObject.pos.Tile, dest.Tile);
+            UpdatePath(room, self.abstractPhysicalObject.pos.Tile, dest.Tile + new IntVector2(0, 2));
             if (path == null) return;
 
-            if(lastTile == self.abstractPhysicalObject.pos.Tile) stuckInPosCounter++;
+            if (lastTile == self.abstractPhysicalObject.pos.Tile) stuckInPosCounter++;
             else
             {
                 lastTile = self.abstractPhysicalObject.pos.Tile;
@@ -102,27 +119,55 @@ namespace MagneCat.MagnetSpear
             self.rotation = self.firstChunk.vel.normalized;
 
             //更新路径点
-            if (Custom.DistLess(nextPathPos, self.firstChunk.pos,20f) && currentPathIndex < path.Length - 1)
+            if (Custom.DistLess(nextPathPos, self.firstChunk.pos, 20f) && currentPathIndex < path.Length - 1)
             {
                 var shortcut = room.shortcutData(nextPathPos);
                 ShortcutData? nextPathShortcutData = null;
-                if(currentPathIndex + 1 < path.Length)
+                if (currentPathIndex + 1 < path.Length)
                 {
                     nextPathShortcutData = room.shortcutData(path.tiles[currentPathIndex + 1]);
                 }
                 if (shortcut.shortCutType == ShortcutData.Type.Normal && nextPathShortcutData != null && nextPathShortcutData.Value.shortCutType == shortcut.shortCutType)
                 {
-                    var vessel = new SpearShortcutVessel(self, SpearShortcutVessel.GetVirtualAbCreature(), self.room);//利用一个包装的生物把矛从管道中带走
-                    self.room.AddObject(vessel);
-                    vessel.SuckedIntoShortCut(shortcut.StartTile, false);
+                    SuckIntoShortcut(shortcut.StartTile, self.room);
                 }
                 currentPathIndex++;
             }
-            if(stuckInPosCounter > 80 && currentPathIndex < path.Length - 1)
+            if (stuckInPosCounter > 80 && currentPathIndex < path.Length - 1)
             {
                 shouldUpdatePath = true;
                 stuckInPosCounter = 0;
             }
+
+            //
+            if (Custom.DistLess(floatingCore.ring.ringPos, self.firstChunk.pos, 40f))
+            {
+                Debug.Log("Change Mode to OnRing");
+                mode = Mode.OnRing;
+                floatingCore.ring.AddToRing(this);
+            }
+        }
+        public void OnRingUpdate(Spear self)
+        {
+            if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack)
+            {
+                self.gravity = 0.9f;
+                self.GoThroughFloors = false;
+                mode = Mode.Magnetism;
+                Debug.Log("Change Mode to Magnetism");
+                return;
+            }
+            else
+            {
+                self.gravity = 0f;
+                self.GoThroughFloors = true;
+                self.ChangeMode(Weapon.Mode.Free);
+                self.spinning = false;
+            }
+
+            Vector2 targetPos = floatingCore.ring.GetPosOnRing(this, true);
+            self.firstChunk.pos = Vector2.Lerp(self.firstChunk.pos, targetPos, 0.5f);
+            self.rotation = Custom.DirVec(self.firstChunk.lastPos, self.firstChunk.pos);
         }
 
         public void UpdatePath(Room room,IntVector2 start, IntVector2 dest)
@@ -233,6 +278,37 @@ namespace MagneCat.MagnetSpear
             currentPathIndex = 0;
             shouldUpdatePath = false;
             forceFollowingThisPathCounter = 40;
+        }
+
+        public void SuckIntoShortcut(IntVector2 startTile,Room room)
+        {
+            if(!spearRef.TryGetTarget(out var self))return;
+            var vessel = new SpearShortcutVessel(self, SpearShortcutVessel.GetVirtualAbCreature(), self.room);//利用一个包装的生物把矛从管道中带走
+            self.room.AddObject(vessel);
+            vessel.SuckedIntoShortCut(startTile, false);
+        }
+
+        public void Attack(Player player,Vector2 targetPos)
+        {
+            if(!spearRef.TryGetTarget(out var self))return;
+            Vector2 dir = (targetPos - self.firstChunk.pos).normalized;
+
+            self.Thrown(player, self.firstChunk.pos, -dir * 1000f, new IntVector2(dir.x > 0 ? 1 : -1, 0), 1.5f, true);
+
+            float vel = self.firstChunk.vel.magnitude;
+            self.firstChunk.vel = vel * dir;
+            self.rotation = dir;
+            self.setRotation = dir;
+
+            self.gravity = 0.9f;
+            self.GoThroughFloors = false;
+            mode = Mode.Magnetism;
+        }
+
+        public enum Mode
+        {
+            Magnetism,
+            OnRing,
         }
     }
 
