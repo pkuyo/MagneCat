@@ -29,13 +29,12 @@ namespace MagneCat.MagnetSpear
         }
         public void Update(Spear self)
         {
-            if (!floatingCore.ShouldMagnetismSpears) return;
-            if (!playerRef.TryGetTarget(out var player)) return;
-            if(nextTileTimeStacker > 0)
+            if (!floatingCore.ShouldMagnetismSpears)
             {
-                nextTileTimeStacker--;
+                self.gravity = 0.9f;
                 return;
             }
+            if (!playerRef.TryGetTarget(out var player)) return;
 
             var newDest = player.coord;
             var room = self.room;
@@ -46,13 +45,26 @@ namespace MagneCat.MagnetSpear
                 currentPathIndex = 0;
             }
 
-            if(currentPathIndex < path.tiles.Length)
-            {
-                Vector2 nextPathPos = room.MiddleOfTile(path.tiles[currentPathIndex++]);
-                nextTileTimeStacker = 10;
-                self.firstChunk.pos = nextPathPos;
-            }
+            Vector2 nextPathPos = room.MiddleOfTile(path.tiles[currentPathIndex]);
 
+            self.firstChunk.vel = Vector2.Lerp(self.firstChunk.vel, (nextPathPos - self.firstChunk.pos), 0.05f);
+
+            if(Custom.DistLess(nextPathPos, self.firstChunk.pos,20f) && currentPathIndex < path.Length - 1)
+            {
+                var shortcut = room.shortcutData(nextPathPos);
+                ShortcutData? nextPathShortcutData = null;
+                if(currentPathIndex + 1 < path.Length)
+                {
+                    nextPathShortcutData = room.shortcutData(path.tiles[currentPathIndex + 1]);
+                }
+                if (shortcut.shortCutType == ShortcutData.Type.Normal && nextPathShortcutData != null && nextPathShortcutData.Value.shortCutType == shortcut.shortCutType)
+                {
+                    var vessel = new SpearShortcutVessel(self, SpearShortcutVessel.GetVirtualAbCreature(), self.room);
+                    self.room.AddObject(vessel);
+                    vessel.SuckedIntoShortCut(shortcut.StartTile, false);
+                }
+                currentPathIndex++;
+            }
         }
 
         public QuickPath UpdatePath(Room room,IntVector2 start,IntVector2 dest)

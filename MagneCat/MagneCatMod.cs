@@ -6,6 +6,9 @@ using System.Security.Permissions;
 using UnityEngine;
 using System.Collections;
 
+#pragma warning disable CS0618
+[assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
+#pragma warning restore CS0618
 namespace MagneCat
 {
     [BepInPlugin("magnecat","Magnecat","1.0.0")]

@@ -28,7 +28,6 @@ namespace MagneCat.MagnetSpear
             if (!module.playerRef.TryGetTarget(out var player)) return;
 
             ShouldMagnetismSpears = Input.GetKey(KeyCode.C);
-            if( ShouldMagnetismSpears ) { Debug.Log("ShouldMagnetismSpears"); }
 
             var spears = from updated in player.room.updateList where updated is Spear select updated as Spear;
             foreach (Spear spear in spears)

@@ -91,7 +91,6 @@ namespace MagneCat.hook
 
         public void Update()
         {
-            Debug.Log("update");
             Player player;
             if (!playerRef.TryGetTarget(out player))
                 return;
