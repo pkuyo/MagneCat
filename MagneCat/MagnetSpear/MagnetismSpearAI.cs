@@ -19,12 +19,14 @@ namespace MagneCat.MagnetSpear
         public WeakReference<Player> playerRef;
 
         public QuickPath? path;
-        public WorldCoordinate dest;
+        public IntVector2 dest;
 
         public IntVector2 lastTile;
+        public List<IntVector2> shortcutPath = new List<IntVector2>();
 
         public Mode mode;
 
+        public int teleportCooler = 0;
         public int nextTileTimeStacker = 0;
         public int currentPathIndex = 0;
         public int stuckInPosCounter = 0;//卡在一个地方太久则尝试重新计算
@@ -51,28 +53,39 @@ namespace MagneCat.MagnetSpear
             switch (mode)
             {
                 case Mode.Magnetism:
+                    if (!playerRef.TryGetTarget(out var player)) return;
+                    var newDest = player.coord.Tile;
+                    var room = self.room;
+
+                    if (newDest != dest || shouldUpdatePath)
+                    {
+                        dest = newDest;
+                        shouldUpdatePath = true;
+                    }
                     MagnetismUpdate(self);
                     break;
                 case Mode.OnRing:
+
                     OnRingUpdate(self);
                     break;
             }
         }
 
-        public void MagnetismUpdate(Spear self)
+        public void MagnetismUpdate(Spear self,bool forceMagnetism = false)
         {
             //按下吸附的时候重新计算路径
-            if (lastShouldMagnetism != floatingCore.ShouldMagnetismSpears && floatingCore.ShouldMagnetismSpears)
+            bool shouldMagnetism = floatingCore.ShouldMagnetismSpears || forceMagnetism;
+            if (lastShouldMagnetism != shouldMagnetism && shouldMagnetism)
             {
                 Debug.Log("ReUpdate Path");
                 shouldUpdatePath = true;
                 forceFollowingThisPathCounter = 0;
                 randomDelay = Random.Range(0, 5);
             }
-            lastShouldMagnetism = floatingCore.ShouldMagnetismSpears;
+            lastShouldMagnetism = shouldMagnetism;
 
             //不吸附矛的时候更改矛的状态为正常状态
-            if (!floatingCore.ShouldMagnetismSpears)
+            if (!shouldMagnetism)
             {
                 self.gravity = 0.9f;
                 self.GoThroughFloors = false;
@@ -85,18 +98,8 @@ namespace MagneCat.MagnetSpear
             {
                 self.ChangeMode(Weapon.Mode.Free);
             }
-            if (!playerRef.TryGetTarget(out var player)) return;
 
-            var newDest = player.coord;
-            var room = self.room;
-
-            if (newDest != dest || shouldUpdatePath)
-            {
-                dest = player.coord;
-                shouldUpdatePath = true;
-            }
-
-            UpdatePath(room, self.abstractPhysicalObject.pos.Tile, dest.Tile + new IntVector2(0, 2));
+            UpdatePath(self.room, self.abstractPhysicalObject.pos.Tile, dest + new IntVector2(0, 2));
             if (path == null) return;
 
             if (lastTile == self.abstractPhysicalObject.pos.Tile) stuckInPosCounter++;
@@ -110,7 +113,7 @@ namespace MagneCat.MagnetSpear
             self.GoThroughFloors = true;
 
             //移动矛
-            Vector2 nextPathPos = room.MiddleOfTile(path.tiles[currentPathIndex]);
+            Vector2 nextPathPos = self.room.MiddleOfTile(path.tiles[currentPathIndex]);
 
             Vector2 delta = Vector2.Lerp(self.firstChunk.vel, (nextPathPos - self.firstChunk.pos), 0.05f) - self.firstChunk.vel;
             delta = Vector2.ClampMagnitude(delta, 1f);
@@ -121,11 +124,11 @@ namespace MagneCat.MagnetSpear
             //更新路径点
             if (Custom.DistLess(nextPathPos, self.firstChunk.pos, 20f) && currentPathIndex < path.Length - 1)
             {
-                var shortcut = room.shortcutData(nextPathPos);
+                var shortcut = self.room.shortcutData(nextPathPos);
                 ShortcutData? nextPathShortcutData = null;
                 if (currentPathIndex + 1 < path.Length)
                 {
-                    nextPathShortcutData = room.shortcutData(path.tiles[currentPathIndex + 1]);
+                    nextPathShortcutData = self.room.shortcutData(path.tiles[currentPathIndex + 1]);
                 }
                 if (shortcut.shortCutType == ShortcutData.Type.Normal && nextPathShortcutData != null && nextPathShortcutData.Value.shortCutType == shortcut.shortCutType)
                 {
@@ -152,7 +155,6 @@ namespace MagneCat.MagnetSpear
             if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack)
             {
                 self.gravity = 0.9f;
-                self.GoThroughFloors = false;
                 mode = Mode.Magnetism;
                 Debug.Log("Change Mode to Magnetism");
                 return;
@@ -160,14 +162,57 @@ namespace MagneCat.MagnetSpear
             else
             {
                 self.gravity = 0f;
-                self.GoThroughFloors = true;
                 self.ChangeMode(Weapon.Mode.Free);
                 self.spinning = false;
             }
 
+            if (!playerRef.TryGetTarget(out var player)) return;
             Vector2 targetPos = floatingCore.ring.GetPosOnRing(this, true);
-            self.firstChunk.pos = Vector2.Lerp(self.firstChunk.pos, targetPos, 0.5f);
-            self.rotation = Custom.DirVec(self.firstChunk.lastPos, self.firstChunk.pos);
+
+            if(shortcutPath.Count > 0)
+            {
+                var newDest = shortcutPath[0];
+                if (newDest != dest || shouldUpdatePath)
+                {
+                    dest = newDest;
+                    shouldUpdatePath = true;
+                }
+            }
+
+            if(player.room != self.room)
+            {
+                TryTeleportToOwner(self);
+            }
+
+            if (!Custom.DistLess(targetPos, self.firstChunk.pos, floatingCore.ring.ringRad) || floatingCore.ring.playerInShortcut || shortcutPath.Count > 0 || shouldUpdatePath)
+            {
+                MagnetismUpdate(self, true);
+                if (shortcutPath.Count  == 0)
+                {
+                    var newDest = player.coord.Tile;
+
+                    if (newDest != dest || shouldUpdatePath)
+                    {
+                        dest = newDest;
+                        shouldUpdatePath = true;
+                    }
+                }
+                else
+                {
+                    if (path != null && currentPathIndex == path.Length - 1 && self.abstractPhysicalObject.pos.Tile == path.tiles[currentPathIndex])
+                    {
+                        SuckIntoShortcut(shortcutPath[0], self.room);
+                    }
+                }
+            }
+            else
+            {
+                Vector2 delta = targetPos - self.firstChunk.pos;
+                delta = Vector2.ClampMagnitude(delta, 15f);
+                self.firstChunk.vel = delta;
+                self.rotation = self.firstChunk.vel.normalized;
+            }
+
         }
 
         public void UpdatePath(Room room,IntVector2 start, IntVector2 dest)
@@ -286,6 +331,8 @@ namespace MagneCat.MagnetSpear
             var vessel = new SpearShortcutVessel(self, SpearShortcutVessel.GetVirtualAbCreature(), self.room);//利用一个包装的生物把矛从管道中带走
             self.room.AddObject(vessel);
             vessel.SuckedIntoShortCut(startTile, false);
+
+            if (shortcutPath.Count > 0) shortcutPath.RemoveAt(0);
         }
 
         public void Attack(Player player,Vector2 targetPos)
@@ -305,6 +352,35 @@ namespace MagneCat.MagnetSpear
             mode = Mode.Magnetism;
         }
 
+        public void TryTeleportToOwner(Spear self)
+        {
+            if (teleportCooler > 0)
+            {
+                teleportCooler--;
+                return;
+            }
+            if (!playerRef.TryGetTarget(out var player)) return;
+            var room = self.room;
+            if (!player.inShortcut)
+            {
+                if (room == null || room == player.room) return;
+                foreach (var shortcut in room.shortcuts)
+                {
+                    if (shortcut.shortCutType == ShortcutData.Type.RoomExit)
+                    {
+                        int connection = room.abstractRoom.connections[shortcut.destNode];
+                        AbstractRoom abstractRoom = room.world.GetAbstractRoom(connection);
+                        if (abstractRoom == player.room.abstractRoom)
+                        {
+                            SuckIntoShortcut(shortcut.StartTile, room);
+                            shortcutPath.Clear();
+                            teleportCooler = 10;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
         public enum Mode
         {
             Magnetism,

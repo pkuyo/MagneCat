@@ -5,6 +5,9 @@ using MagneCat.MagnetSpear;
 using System.Security.Permissions;
 using UnityEngine;
 using System.Collections;
+using static System.Net.Mime.MediaTypeNames;
+using System.Reflection;
+using Menu.Remix;
 
 #pragma warning disable CS0618
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -21,6 +24,7 @@ namespace MagneCat
             On.RainWorld.OnModsInit += RainWorld_OnModsInit;
         }
 
+
         private void RainWorld_OnModsInit(On.RainWorld.orig_OnModsInit orig, RainWorld self)
         {
             orig.Invoke(self);
@@ -30,6 +34,9 @@ namespace MagneCat
             {
                 Features.OnModInit();
                 SpearPatch.OnModInit();
+
+                JollyExtend.PatchOn();
+                JollySetupDialogExtend.PatchOn();
             }
             catch (Exception e)
             {

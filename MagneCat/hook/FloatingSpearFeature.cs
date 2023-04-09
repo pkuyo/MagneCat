@@ -20,6 +20,22 @@ namespace MagneCat.hook
             On.Player.ctor += Player_ctor;
             On.Player.Update += Player_Update;
             On.Player.Stun += Player_Stun;
+
+            On.Creature.SuckedIntoShortCut += Creature_SuckedIntoShortCut;
+        }
+
+        private static void Creature_SuckedIntoShortCut(On.Creature.orig_SuckedIntoShortCut orig, Creature self, IntVector2 entrancePos, bool carriedByOther)
+        {
+            Player player = self as Player;
+            if (player != null && floatingSpear.TryGetValue(player, out var module))
+            {
+                var shortcut = self.room.shortcutData(entrancePos);
+                if (shortcut.shortCutType != ShortcutData.Type.DeadEnd)
+                {
+                    module.floatingCore.ring.PlayerEnteringNewShortcut(shortcut, self.room);
+                }
+            }
+            orig.Invoke(self, entrancePos, carriedByOther);
         }
 
         private static void Player_Stun(On.Player.orig_Stun orig, Player self, int st)

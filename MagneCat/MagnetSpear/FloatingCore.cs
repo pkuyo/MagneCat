@@ -88,7 +88,11 @@ namespace MagneCat.MagnetSpear
 
             public int attackCountDown = 0;
 
+            public bool playerInShortcut = false;
+
             public List<WeakReference<MagnetismSpearAI>> onRingSpearAI = new List<WeakReference<MagnetismSpearAI>>();
+
+            public List<ShortcutData> shortcutEntranceQueue = new List<ShortcutData>();
             public FloatingRing(FloatingCore core)
             {
                 floatingCore = core;
@@ -100,6 +104,7 @@ namespace MagneCat.MagnetSpear
                 if(!module.playerRef.TryGetTarget(out var player)) return;
 
 
+                //bool nextAimShortcut = shortcutEntranceQueue.Count > 0;
                 for (int i = onRingSpearAI.Count - 1; i >= 0; i--)
                 {
                     if (!onRingSpearAI[i].TryGetTarget(out var target))
@@ -108,24 +113,34 @@ namespace MagneCat.MagnetSpear
                         continue;
                     }
                     if (target.mode == MagnetismSpearAI.Mode.Magnetism) onRingSpearAI.RemoveAt(i);
+                    //if (target.aimShorcut != null) nextAimShortcut = true;
                 }
+
+                //if (nextAimShortcut && shortcutEntranceQueue.Count > 0)
+                //{
+                //    shortcutEntranceQueue.RemoveAt(0);
+                //    if (shortcutEntranceQueue.Count > 0)
+                //    {
+                //        for (int i = 0; i < onRingSpearAI.Count; i++)
+                //        {
+                //            if (onRingSpearAI[i].TryGetTarget(out var target))
+                //            {
+                //                if (target.aimShorcut == null) target.aimShorcut = shortcutEntranceQueue[0].StartTile;
+                //            }
+                //        }
+                //    }
+                //    else ringPos = player.DangerPos;
+                //}
 
                 if (!player.inShortcut)
                 {
-                    ringPos = Vector2.Lerp(ringPos, player.DangerPos + Vector2.up * 40f, 0.1f);;
+                    ringPos = Vector2.Lerp(ringPos, player.DangerPos + Vector2.up * 40f, 0.1f);
+                    playerInShortcut = false;
                 }
-                else if(player.enteringShortCut != null)
-                {
-                    for (int i = onRingSpearAI.Count - 1; i >= 0; i--)
-                    {
-                        if (onRingSpearAI[i].TryGetTarget(out var target))
-                        {
-                            target.SuckIntoShortcut(player.enteringShortCut.Value, player.room);
-                        }
-                    }
-                }
+
                 rotateAngle += Time.deltaTime * 120f;
 
+                //攻击行为
                 if (attackCountDown > 0) attackCountDown--;
                 else
                 {
@@ -165,6 +180,27 @@ namespace MagneCat.MagnetSpear
                 }
             }
 
+            public void PlayerEnteringNewShortcut(ShortcutData shortcut,Room room)
+            {
+                ringPos = room.MiddleOfTile(shortcut.DestTile);
+                playerInShortcut = true;
+                //shortcutEntranceQueue.Add(shortcut);
+
+                for (int i = 0; i < onRingSpearAI.Count; i++)
+                {
+                    if (onRingSpearAI[i].TryGetTarget(out var target))
+                    {
+                        target.shortcutPath.Add(shortcut.StartTile);
+                    }
+                }
+            }
+
+            //public bool ShouldSpearSuckInThisShortcut(IntVector2 shortcut,Room room)
+            //{
+            //    if (shortcutEntranceQueue.Count == 0) return false;
+            //    return shortcut == shortcutEntranceQueue[0].StartTile;
+            //}
+
             public Vector2 GetPosOnRing(MagnetismSpearAI ai,bool addIfNotOnRing = false)
             {
                 //获取index
@@ -187,6 +223,13 @@ namespace MagneCat.MagnetSpear
                     else return Vector2.zero;
                 }
 
+                //if(shortcutEntranceQueue.Count > 0)
+                //{
+                //    if(ai.spearRef.TryGetTarget(out var spear))
+                //    {
+                //        return spear.room.MiddleOfTile(shortcutEntranceQueue[0].StartTile);
+                //    }
+                //}
 
                 float angle = Custom.LerpMap((float)onRingIndex, 0f, onRingSpearAI.Count, 0f, 360f);
                 angle += rotateAngle;
