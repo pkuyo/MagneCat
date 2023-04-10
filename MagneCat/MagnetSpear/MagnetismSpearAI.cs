@@ -165,7 +165,7 @@ namespace MagneCat.MagnetSpear
         }
         public void OnRingUpdate(Spear self)
         {
-            if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack)
+            if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack || !MagnetEnergyHUD.CanUseEnergy())
             {
                 self.gravity = 0.9f;
                 ChangeMode(Mode.Magnetism);
@@ -180,6 +180,9 @@ namespace MagneCat.MagnetSpear
             }
 
             if (!playerRef.TryGetTarget(out var player)) return;
+
+            MagnetEnergyHUD.StaticSetEnergyForASecond(-0.5f);
+
             Vector2 targetPos = floatingCore.ring.GetPosOnRing(this, true);
             var ringPosTile = self.room.GetTile(floatingCore.ring.ringPos);
 

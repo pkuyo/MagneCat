@@ -29,7 +29,8 @@ namespace MagneCat.MagnetSpear
             if (!moduleRef.TryGetTarget(out var module)) return;
             if (!module.playerRef.TryGetTarget(out var player)) return;
 
-            ShouldMagnetismSpears = Input.GetKey(KeyCode.C);
+            ShouldMagnetismSpears = Input.GetKey(KeyCode.C) && MagnetEnergyHUD.CanUseEnergy();
+            if (ShouldMagnetismSpears) MagnetEnergyHUD.StaticSetEnergyForASecond(-2f);
 
             var spears = from updated in player.room.updateList where updated is Spear select updated as Spear;
 

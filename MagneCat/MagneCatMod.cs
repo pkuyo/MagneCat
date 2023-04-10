@@ -34,7 +34,7 @@ namespace MagneCat
             {
                 Features.OnModInit();
                 SpearPatch.OnModInit();
-
+                HUDPatch.PatchOn();
                 //JollyExtend.PatchOn();
                 //JollySetupDialogExtend.PatchOn();
             }
