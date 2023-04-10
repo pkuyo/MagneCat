@@ -184,6 +184,7 @@ namespace MagneCat
                 StringBuilder stringBuilder = new StringBuilder();
                 stringBuilder.Append("JollyPlayerOptionModule");;
 
+                if (uniqueColors == null) return "";
                 foreach(var color in uniqueColors)
                 {
                     string hex = Custom.colorToHex(color);

@@ -14,6 +14,8 @@ namespace MagneCat.MagnetSpear
 {
     public class MagnetismSpearAI
     {
+        public static int teleportDelay = 0;
+
         public FloatingCore floatingCore;
         public WeakReference<Spear> spearRef;
         public WeakReference<Player> playerRef;
@@ -54,14 +56,13 @@ namespace MagneCat.MagnetSpear
             {
                 case Mode.Magnetism:
                     if (!playerRef.TryGetTarget(out var player)) return;
-                    var newDest = player.coord.Tile;
                     var room = self.room;
 
-                    if (newDest != dest || shouldUpdatePath)
+                    if(room != null)
                     {
-                        dest = newDest;
-                        shouldUpdatePath = true;
+                        UpdateDest(self, room.GetTilePosition(floatingCore.ring.ringPos));
                     }
+
                     MagnetismUpdate(self);
                     break;
                 case Mode.OnRing:
@@ -99,7 +100,7 @@ namespace MagneCat.MagnetSpear
                 self.ChangeMode(Weapon.Mode.Free);
             }
 
-            UpdatePath(self.room, self.abstractPhysicalObject.pos.Tile, dest + new IntVector2(0, 2));
+            UpdatePath(self.room, self.abstractPhysicalObject.pos.Tile, dest);
             if (path == null) return;
 
             if (lastTile == self.abstractPhysicalObject.pos.Tile) stuckInPosCounter++;
@@ -115,38 +116,50 @@ namespace MagneCat.MagnetSpear
             //移动矛
             Vector2 nextPathPos = self.room.MiddleOfTile(path.tiles[currentPathIndex]);
 
-            Vector2 delta = Vector2.Lerp(self.firstChunk.vel, (nextPathPos - self.firstChunk.pos), 0.05f) - self.firstChunk.vel;
-            delta = Vector2.ClampMagnitude(delta, 1f);
-            self.firstChunk.vel += delta;
-            self.firstChunk.vel = Vector2.ClampMagnitude(self.firstChunk.vel, 15f);
-            self.rotation = self.firstChunk.vel.normalized;
+            FlyTo(self, nextPathPos, FlyMode.Accelerate);
 
             //更新路径点
-            if (Custom.DistLess(nextPathPos, self.firstChunk.pos, 20f) && currentPathIndex < path.Length - 1)
+            if (Custom.DistLess(nextPathPos, self.firstChunk.pos, 20f))
             {
                 var shortcut = self.room.shortcutData(nextPathPos);
                 ShortcutData? nextPathShortcutData = null;
-                if (currentPathIndex + 1 < path.Length)
+
+                if(currentPathIndex < path.Length - 1)
                 {
-                    nextPathShortcutData = self.room.shortcutData(path.tiles[currentPathIndex + 1]);
+                    if (currentPathIndex + 1 < path.Length)
+                    {
+                        nextPathShortcutData = self.room.shortcutData(path.tiles[currentPathIndex + 1]);
+                    }
+                    //保证仅仅路过管道口并不会导致矛进入管道
+                    if (shortcut.shortCutType == ShortcutData.Type.Normal && nextPathShortcutData != null && nextPathShortcutData.Value.shortCutType == shortcut.shortCutType)
+                    {
+                        SuckIntoShortcut(shortcut.StartTile, self.room);
+                    }
+
+                    currentPathIndex++;
                 }
-                if (shortcut.shortCutType == ShortcutData.Type.Normal && nextPathShortcutData != null && nextPathShortcutData.Value.shortCutType == shortcut.shortCutType)
+                
+                //如果是管道路径，则可以进入
+                if(shortcutPath.Count > 0 && shortcutPath[0] == shortcut.StartTile)
                 {
                     SuckIntoShortcut(shortcut.StartTile, self.room);
                 }
-                currentPathIndex++;
-            }
-            if (stuckInPosCounter > 80 && currentPathIndex < path.Length - 1)
+                if(shortcutPath.Count > 0)
+                {
+                    Debug.Log(String.Format("{0} -> {1} | {2} : {3} / {4}", self.abstractPhysicalObject.pos.Tile, path.tiles[currentPathIndex], shortcutPath[0], currentPathIndex, path.tiles.Length));
+                }
+             }
+            if (stuckInPosCounter > 40 && currentPathIndex < path.Length - 1)
             {
+                UpdateDest(self, self.room.GetTilePosition(floatingCore.ring.ringPos));
                 shouldUpdatePath = true;
                 stuckInPosCounter = 0;
             }
 
             //
-            if (Custom.DistLess(floatingCore.ring.ringPos, self.firstChunk.pos, 40f))
+            if (Custom.DistLess(floatingCore.ring.ringPos, self.firstChunk.pos, 40f) || self.room.VisualContact(self.firstChunk.pos,floatingCore.ring.ringPos))
             {
-                Debug.Log("Change Mode to OnRing");
-                mode = Mode.OnRing;
+                ChangeMode(Mode.OnRing);
                 floatingCore.ring.AddToRing(this);
             }
         }
@@ -155,7 +168,7 @@ namespace MagneCat.MagnetSpear
             if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack)
             {
                 self.gravity = 0.9f;
-                mode = Mode.Magnetism;
+                ChangeMode(Mode.Magnetism);
                 Debug.Log("Change Mode to Magnetism");
                 return;
             }
@@ -168,6 +181,7 @@ namespace MagneCat.MagnetSpear
 
             if (!playerRef.TryGetTarget(out var player)) return;
             Vector2 targetPos = floatingCore.ring.GetPosOnRing(this, true);
+            var ringPosTile = self.room.GetTile(floatingCore.ring.ringPos);
 
             if(shortcutPath.Count > 0)
             {
@@ -179,40 +193,58 @@ namespace MagneCat.MagnetSpear
                 }
             }
 
-            if(player.room != self.room)
+            if(player.room != self.room && player.room != null)
             {
                 TryTeleportToOwner(self);
             }
 
+            
+            if(self.room.VisualContact(floatingCore.ring.ringPos, self.firstChunk.pos) && !ringPosTile.Solid)
+            {
+                FlyTo(self, targetPos, FlyMode.Directly);
+                shouldUpdatePath = false;
+                shortcutPath.Clear();
+
+                return;
+            }
+
             if (!Custom.DistLess(targetPos, self.firstChunk.pos, floatingCore.ring.ringRad) || floatingCore.ring.playerInShortcut || shortcutPath.Count > 0 || shouldUpdatePath)
             {
-                MagnetismUpdate(self, true);
                 if (shortcutPath.Count  == 0)
                 {
-                    var newDest = player.coord.Tile;
-
-                    if (newDest != dest || shouldUpdatePath)
+                    var room = self.room;
+                    if (room != null)
                     {
-                        dest = newDest;
-                        shouldUpdatePath = true;
+                        UpdateDest(self, room.GetTilePosition(floatingCore.ring.ringPos));
                     }
                 }
-                else
-                {
-                    if (path != null && currentPathIndex == path.Length - 1 && self.abstractPhysicalObject.pos.Tile == path.tiles[currentPathIndex])
-                    {
-                        SuckIntoShortcut(shortcutPath[0], self.room);
-                    }
-                }
+                MagnetismUpdate(self, true);
             }
             else
             {
-                Vector2 delta = targetPos - self.firstChunk.pos;
-                delta = Vector2.ClampMagnitude(delta, 15f);
-                self.firstChunk.vel = delta;
-                self.rotation = self.firstChunk.vel.normalized;
+                FlyTo(self, targetPos, FlyMode.Directly);
             }
 
+        }
+
+        public void FlyTo(Spear self,Vector2 dest, FlyMode mode)
+        {
+            switch (mode)
+            {
+                case FlyMode.Directly:
+                    Vector2 delta = dest - self.firstChunk.pos;
+                    delta = Vector2.ClampMagnitude(delta, 15f);
+                    self.firstChunk.vel = delta;
+                    self.rotation = self.firstChunk.vel.normalized;
+                    break;
+                case FlyMode.Accelerate:
+                    Vector2 acc = Vector2.Lerp(self.firstChunk.vel, (dest - self.firstChunk.pos), 0.05f) - self.firstChunk.vel;
+                    acc = Vector2.ClampMagnitude(acc, 1f);
+                    self.firstChunk.vel += acc;
+                    self.firstChunk.vel = Vector2.ClampMagnitude(self.firstChunk.vel, 15f);
+                    self.rotation = self.firstChunk.vel.normalized;
+                    break;
+            }
         }
 
         public void UpdatePath(Room room,IntVector2 start, IntVector2 dest)
@@ -359,6 +391,11 @@ namespace MagneCat.MagnetSpear
                 teleportCooler--;
                 return;
             }
+            if (teleportDelay > 0)
+            {
+                teleportDelay--;
+                return;
+            }
             if (!playerRef.TryGetTarget(out var player)) return;
             var room = self.room;
             if (!player.inShortcut)
@@ -375,16 +412,44 @@ namespace MagneCat.MagnetSpear
                             SuckIntoShortcut(shortcut.StartTile, room);
                             shortcutPath.Clear();
                             teleportCooler = 10;
+                            teleportDelay = 2;
                             return;
                         }
                     }
                 }
             }
         }
+
+        public void ChangeMode(Mode newMode)
+        {
+            if(mode == newMode) return;
+            mode = newMode;
+            Debug.Log("Change Mode to " + newMode.ToString());
+        }
+
+        public void UpdateDest(Spear self,IntVector2 newDest)
+        {
+            if (!playerRef.TryGetTarget(out var player)) return;
+            var tile = self.room.GetTile(newDest);
+            if (tile.Solid) newDest = self.room.GetTilePosition(player.DangerPos);
+
+            if (newDest != dest || shouldUpdatePath)
+            {
+                dest = newDest;
+                shouldUpdatePath = true;
+            }
+        }
+
         public enum Mode
         {
             Magnetism,
             OnRing,
+        }
+
+        public enum FlyMode
+        {
+            Directly,
+            Accelerate,
         }
     }
 

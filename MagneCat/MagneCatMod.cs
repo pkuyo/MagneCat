@@ -35,8 +35,8 @@ namespace MagneCat
                 Features.OnModInit();
                 SpearPatch.OnModInit();
 
-                JollyExtend.PatchOn();
-                JollySetupDialogExtend.PatchOn();
+                //JollyExtend.PatchOn();
+                //JollySetupDialogExtend.PatchOn();
             }
             catch (Exception e)
             {
@@ -44,6 +44,15 @@ namespace MagneCat
             }
 
             inited = true;
+        }
+
+        public sealed class Test : AbstractPhysicalObject
+        {
+            public Test(World world,AbstractObjectType type,PhysicalObject real, WorldCoordinate pos, EntityID ID) : base(world, type, real, pos, ID)
+            {
+
+            }
+
         }
     }
 }
