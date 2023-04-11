@@ -104,8 +104,10 @@ namespace MagneCat.MagnetSpear
                 if (!floatingCore.moduleRef.TryGetTarget(out var module)) return;
                 if(!module.playerRef.TryGetTarget(out var player)) return;
 
-
+                var hud = MagnetEnergyHUD.instance;
                 //bool nextAimShortcut = shortcutEntranceQueue.Count > 0;
+                Vector2 camPos = hud.cam.pos;
+
                 for (int i = onRingSpearAI.Count - 1; i >= 0; i--)
                 {
                     if (!onRingSpearAI[i].TryGetTarget(out var target))
@@ -113,9 +115,24 @@ namespace MagneCat.MagnetSpear
                         onRingSpearAI.RemoveAt(i);
                         continue;
                     }
-                    if (target.mode == MagnetismSpearAI.Mode.Magnetism) onRingSpearAI.RemoveAt(i);
+                    if (target.mode == MagnetismSpearAI.Mode.Magnetism)
+                    {
+                        onRingSpearAI.RemoveAt(i);
+                        continue;
+                    }
                     //if (target.aimShorcut != null) nextAimShortcut = true;
                 }
+
+                hud.effectiveLength = onRingSpearAI.Count + 1;
+                hud.allMagnetData[0] = new Vector4(ringPos.x - camPos.x, ringPos.y - camPos.y, 40f, 10f);
+
+                for(int i = 0;i < onRingSpearAI.Count; i++)
+                {
+                    onRingSpearAI[i].TryGetTarget(out var target);
+                    target.spearRef.TryGetTarget(out var spear);
+                    hud.allMagnetData[i + 1] = new Vector4(spear.firstChunk.pos.x - camPos.x, spear.firstChunk.pos.y - camPos.y, 20f, 5f);
+                }
+
 
                 //if (nextAimShortcut && shortcutEntranceQueue.Count > 0)
                 //{

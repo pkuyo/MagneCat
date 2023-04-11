@@ -3,12 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using Color = UnityEngine.Color;
 using Vector2 = UnityEngine.Vector2;
+using Vector4 = UnityEngine.Vector4;
 
 namespace MagneCat
 {
@@ -32,7 +34,7 @@ namespace MagneCat
         private static void HUD_InitSinglePlayerHud(On.HUD.HUD.orig_InitSinglePlayerHud orig, HUD.HUD self, RoomCamera cam)
         {
             orig.Invoke(self, cam);
-            if (MagnetEnergyHUD.instance == null) self.AddPart(new MagnetEnergyHUD(self, new Vector2(300f, 10f), 200f));
+            if (MagnetEnergyHUD.instance == null) self.AddPart(new MagnetEnergyHUD(self, new Vector2(300f, 10f), 200f, cam));
         }
     }
 
@@ -53,9 +55,12 @@ namespace MagneCat
         public Vector2 pos;
         public Vector2 size;
 
+        public RoomCamera cam;
+
         public FSprite backgroundSprite;
         public FSprite energySprite;
         public FSprite retentionSprite;
+        public CustomFSprite effectSprite;
 
         public GradientCol backgroundColor;
         public GradientCol energyColor;
@@ -70,14 +75,19 @@ namespace MagneCat
 
         public Queue<float> energyGoalQueue = new Queue<float>(60);//remeber 60 frame in total;
 
-        public MagnetEnergyHUD(HUD.HUD hud,Vector2 size,float maxEnergy) : base(hud)
+        public Vector4[] allMagnetData = new Vector4[100];
+        public int effectiveLength = 0;
+
+        public MagnetEnergyHUD(HUD.HUD hud,Vector2 size,float maxEnergy, RoomCamera cam) : base(hud)
         {
             instance = this;
             this.maxEnergy = maxEnergy;
+            this.cam = cam;
 
             backgroundSprite = new FSprite("pixel", true) { anchorX = 0f};
             energySprite = new FSprite("pixel", true) {anchorX = 0f};
             retentionSprite = new FSprite("pixel", true) { anchorX = 0f };
+            effectSprite = new CustomFSprite("pixel") { shader = hud.rainWorld.Shaders["MagneticFieldLines"] };
 
             backgroundColor = new GradientCol(Color.cyan * 0.5f);
             energyColor = new GradientCol(Color.white);
@@ -93,9 +103,12 @@ namespace MagneCat
             hud.fContainers[0].AddChild(backgroundSprite);
             hud.fContainers[0].AddChild(energySprite);
             hud.fContainers[0].AddChild(retentionSprite);
+            //hud.fContainers[0].AddChild(effectSprite);
             
             retentionSprite.MoveInFrontOfOtherNode(backgroundSprite);
             energySprite.MoveInFrontOfOtherNode(retentionSprite);
+
+            effectSprite.MoveToFront();
 
             for(int i = 0;i < 60; i++)
             {
@@ -118,6 +131,9 @@ namespace MagneCat
             {
                 StaticSetEnergyForASecond(10f);
             }
+
+            //effectSprite._renderLayer._material.SetVectorArray("totalMagneticData", allMagnetData);
+            //effectSprite._renderLayer._material.SetInt("effectiveMagneticDatas", effectiveLength);
         }
 
         public override void Draw(float timeStacker)
@@ -148,6 +164,11 @@ namespace MagneCat
             retentionSprite.alpha = retentionAlpha.LerpToGoal(Show ? 1f : 0f, 0.1f);
             retentionSprite.scaleX =  size.x * Mathf.Clamp01(tt - t);
             retentionSprite.scaleY = size.y;
+
+            effectSprite.MoveVertice(0, Vector2.zero);
+            effectSprite.MoveVertice(1, new Vector2(0,Screen.height));
+            effectSprite.MoveVertice(2, new Vector2(Screen.width, Screen.height));
+            effectSprite.MoveVertice(3, new Vector2(Screen.width, 0));
         }
 
         public override void ClearSprites()

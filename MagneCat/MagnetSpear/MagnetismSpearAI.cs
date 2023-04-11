@@ -28,6 +28,7 @@ namespace MagneCat.MagnetSpear
 
         public Mode mode;
 
+        public int notInSameRoomCounter = 0;
         public int teleportCooler = 0;
         public int nextTileTimeStacker = 0;
         public int currentPathIndex = 0;
@@ -57,16 +58,14 @@ namespace MagneCat.MagnetSpear
                 case Mode.Magnetism:
                     if (!playerRef.TryGetTarget(out var player)) return;
                     var room = self.room;
-
+                    if (room != player.room) return;
                     if(room != null)
                     {
                         UpdateDest(self, room.GetTilePosition(floatingCore.ring.ringPos));
                     }
-
                     MagnetismUpdate(self);
                     break;
                 case Mode.OnRing:
-
                     OnRingUpdate(self);
                     break;
             }
@@ -163,6 +162,7 @@ namespace MagneCat.MagnetSpear
                 floatingCore.ring.AddToRing(this);
             }
         }
+
         public void OnRingUpdate(Spear self)
         {
             if (self.mode == Weapon.Mode.Carried || self.mode == Weapon.Mode.OnBack || !MagnetEnergyHUD.CanUseEnergy())
@@ -180,6 +180,17 @@ namespace MagneCat.MagnetSpear
             }
 
             if (!playerRef.TryGetTarget(out var player)) return;
+            if (self.room != player.room)
+            {
+                notInSameRoomCounter++;
+            }
+            else notInSameRoomCounter = 0;
+            if(notInSameRoomCounter > 80)
+            {
+                notInSameRoomCounter = 0;
+                ChangeMode(Mode.Magnetism);
+                return;
+            }
 
             MagnetEnergyHUD.StaticSetEnergyForASecond(-0.5f);
 
