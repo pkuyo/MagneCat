@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Numerics;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -86,7 +88,6 @@ namespace MagneCat
             backgroundAlpha = new GradiantVar<float>(0f);
             energyAlpha = new GradiantVar<float>(0f);
             retentionAlpha = new GradiantVar<float>(0f);
-
             smoothedEnergy = new GradiantVar<float>(maxEnergy);
             smoothedRetentionEnergy = new GradiantVar<float>(maxEnergy);
 
@@ -210,7 +211,7 @@ namespace MagneCat
             }
         }
 
-        public class GradiantVar<T> where T : struct
+        public class GradiantVar<T> where T : IConvertible
         {
             public T goalVar;
             public T currentVar;
@@ -234,8 +235,8 @@ namespace MagneCat
 
                 dynamic a = lastVar;
                 dynamic b = goalVar;
-
                 t = Mathf.Clamp01(t);
+
 
                 currentVar = a * (1f - t) + b * t;
                 lastVar = currentVar;

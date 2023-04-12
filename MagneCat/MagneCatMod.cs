@@ -34,7 +34,11 @@ namespace MagneCat
             {
                 Features.OnModInit();
                 SpearPatch.OnModInit();
-                HUDPatch.PatchOn();
+                EnergyGraphicsHook.OnModInit();
+                var bundle = AssetBundle.LoadFromFile(AssetManager.ResolveFilePath("AssetBundles/hudasset"));
+                self.Shaders.Add("CircleHUD", FShader.CreateShader("CircleHUD", bundle.LoadAsset<Shader>("CircleHUD")));
+
+                //HUDPatch.PatchOn();
                 //JollyExtend.PatchOn();
                 //JollySetupDialogExtend.PatchOn();
             }
