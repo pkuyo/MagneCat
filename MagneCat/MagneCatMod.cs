@@ -18,6 +18,7 @@ namespace MagneCat
     public class MagneCatMod : BaseUnityPlugin
     {
         bool inited = false;
+        public Shader magneticFieldShader;
         
         public void OnEnable()
         {
@@ -41,6 +42,7 @@ namespace MagneCat
                 //HUDPatch.PatchOn();
                 //JollyExtend.PatchOn();
                 //JollySetupDialogExtend.PatchOn();
+                LoadResources(self);
             }
             catch (Exception e)
             {
@@ -48,6 +50,15 @@ namespace MagneCat
             }
 
             inited = true;
+        }
+
+        public void LoadResources(RainWorld self)
+        {
+            string bundlePath = AssetManager.ResolveFilePath("MagnecatBundles/magnecatbundle");
+            AssetBundle ab = AssetBundle.LoadFromFile(bundlePath);
+
+            magneticFieldShader = ab.LoadAsset<Shader>("assets/myshader/magneticfieldlines.shader");
+            self.Shaders.Add("MagneticFieldLines", FShader.CreateShader("MagneticFieldLines", magneticFieldShader));
         }
 
         public sealed class Test : AbstractPhysicalObject

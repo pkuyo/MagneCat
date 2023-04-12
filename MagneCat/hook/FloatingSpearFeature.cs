@@ -22,6 +22,15 @@ namespace MagneCat.hook
             On.Player.Stun += Player_Stun;
 
             On.Creature.SuckedIntoShortCut += Creature_SuckedIntoShortCut;
+
+            On.Player.Grabability += Player_Grabability;
+        }
+
+        private static Player.ObjectGrabability Player_Grabability(On.Player.orig_Grabability orig, Player self, PhysicalObject obj)
+        {
+            var result = orig.Invoke(self, obj);
+            if (obj is TestVine.Hooker) result = Player.ObjectGrabability.TwoHands;
+            return result;
         }
 
         private static void Creature_SuckedIntoShortCut(On.Creature.orig_SuckedIntoShortCut orig, Creature self, IntVector2 entrancePos, bool carriedByOther)
@@ -59,6 +68,19 @@ namespace MagneCat.hook
             orig(self, eu);
             if (floatingSpear.TryGetValue(self, out var module))
                 module.Update();
+
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                Vector2 startPos = self.DangerPos + Vector2.up * 100f;
+                IntVector2? left = SharedPhysics.RayTraceTilesForTerrainReturnFirstSolid(self.room, startPos, startPos + Vector2.left * 1000f);
+                Vector2 l = self.room.MiddleOfTile(left.Value);
+
+                IntVector2? right = SharedPhysics.RayTraceTilesForTerrainReturnFirstSolid(self.room, startPos, startPos + Vector2.right * 1000f);
+                Vector2 r = self.room.MiddleOfTile(right.Value);
+
+                Debug.Log(String.Format("Connect vine from {0} to {1}, distance {2}", l, r, Vector2.Distance(l, r) / 2f));
+                self.room.AddObject(new TestVine(self.room, Vector2.Distance(l, r) / 2f, l, r, true, true));
+            }
         }
 
         static public ConditionalWeakTable<Player, FloatingSpearModule> floatingSpear = new ConditionalWeakTable<Player, FloatingSpearModule>();
